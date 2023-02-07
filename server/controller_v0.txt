@@ -1,0 +1,194 @@
+let mysql = require("mysql");
+
+//การเข้ารหัส password
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
+
+//เวลา login จะมี token ของตัวเองเปรียบเสมือน session
+let jwt = require("jsonwebtoken");
+const secret_token = "mysecret_id_login";
+
+const randomstring = require("randomstring");
+const nodemailer = require('nodemailer');
+
+let dbConn = mysql.createConnection({
+  host: "localhost",
+  user: "root",
+  password: "",
+  database: "ProjectDB",
+});
+
+dbConn.connect();
+
+exports.test = (req, res) => {
+//   return res.send({ error: true, message: "Test project Web API" });
+    let mailOptions = {
+        from: 'ktpyun@gmail.com',
+        to: req.body.email,
+        subject: 'Email Verification',
+        text: '<h3>OTP to verify your email is </h3>' + "<h1 style='font-weight:bold;'>" + otp + "</h1>"
+    };
+    transporter.sendMail(mailOptions, function (error, info) {
+        if (error) {
+            console.log('error',error);
+            return res.send({ error: true, message: "Failed" });
+        } else {
+            console.log('Email sent: ' + info.response);
+            res.render('otp');
+        }
+    });
+};
+
+let otp = Math.random();
+otp = otp * 1000000;
+otp = parseInt(otp);
+
+exports.register = (req, res) => {
+    // const profile = req.files.profile;
+    // console.log(profile);
+    // let image_profile = file.name;
+    // uploadPath = __dirname + '/uploads/' + file.name;
+    // var imgsrc = 'http://localhost:3000/uploads/' + file.name
+    // file.mv(uploadPath, function(err) {
+    //     if (err) return res.status(500).send(err);
+    // });
+    // let img = imgsrc;
+    // console.log(img);
+    
+    // if(req.body.email===''||req.body.password===''||req.body.fname===''||req.body.lname===''){
+    //     return res.json({status: "failed", message: "Empty input fields"});
+    // }
+
+    let transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: 'ktpyun@gmail.com',
+            pass: 'uzklexxuegiwcehr'
+    }
+    });
+
+    let mailOptions = {
+        from: 'ktpyun@gmail.com',
+        to: req.body.email,
+        subject: 'Email Verification',
+        html: '<b>OTP to verify your email is </b>' + "<h1 style='font-weight:bold;'>" + otp + "</h1>"
+    };
+    transporter.sendMail(mailOptions, function (error, info) {
+        if (error) {
+            console.log('error',error);
+            return res.json({ status:"error" , message: "Failed" });
+        } 
+        console.log('Email sent: ' + info.response);
+        // console.log(otp);
+        return res.json({status:"ok", otp});
+    });
+};
+
+exports.verify = (req, res) => {
+    let OTP = parseInt(req.body.otp);
+
+    if (OTP === otp) {
+        bcrypt.hash(req.body.PPassword, saltRounds, function (err, hash) {
+            dbConn.query("INSERT INTO users (email, password, fname, lname) VALUES (?, ?, ?, ?)",
+            [req.body.EEmail, hash, req.body.FFirstname, req.body.LLastname],
+            function (error, results) {
+                if (error) {
+                    console.log('เข้า error');
+                    // return res.json({ status: "error", message: error });
+                } 
+                dbConn.query("SELECT * FROM users WHERE email=?",[req.body.EEmail],function (error, users) {
+                    if (results) {var token = jwt.sign({ email: users[0].email, userId: users[0].id }, secret_token, {expiresIn: "1h"}); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
+                        return res.json({status: "ok", message: "Register success", token,});
+                    } else {
+                        console.log('เข้า else');
+                        return res.json({status: "error",message: "Register failed"});
+                    }
+                });
+            });
+        });
+        // console.log('เข้าอยู่นะ');
+    }else {
+        res.json({status: "error" ,msg: 'otp is incorrect'});
+    }
+}
+
+exports.login = (req, res) => {
+    dbConn.query("SELECT * FROM users WHERE email=?",[req.body.email],
+    function (error, users, fields) {
+      if (error) {
+        return res.json({ status: "error", message: error });
+      }
+      if (users.length == 0) {
+        return res.json({ status: "error", message: "no user found" });
+      }
+      bcrypt.compare(
+        req.body.password,
+        users[0].password,
+        function (error, islogin) {
+          if (islogin) {
+            var token = jwt.sign({ email: users[0].email, userId: users[0].id  }, secret_token, {expiresIn: "1h"}); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
+            return res.json({ status: "ok", message: "login success", token });
+          } else {
+            return res.json({ status: "error", message: "login failed" });
+          }
+        }
+      );
+    }
+  );
+};
+
+exports.index = (req, res) => {
+  try {
+    const token = req.headers.authorization.split(" ")[1];
+    let decoded = jwt.verify(token, secret_token);
+    // console.log(decoded.userId);
+    dbConn.query(
+      "SELECT * FROM users WHERE id=?",
+      [decoded.userId],
+      function (error, users, fields) {
+        // console.log(users[0]);
+        return res.json({ status: "ok", users });
+      }
+    );
+  } catch (err) {
+    return res.json({ status: "error", message: err.message });
+  }
+};
+
+exports.profile = (req, res) => {
+  try {
+    const token = req.headers.authorization.split(" ")[1];
+    let decoded = jwt.verify(token, secret_token);
+    dbConn.query("SELECT * FROM users WHERE id=?",[decoded.userId],
+      function (error, users) {
+        // console.log(users[0]);
+        if (error) {
+          return res.json({ status: "error", message: err.message });
+        } else {
+          return res.json({ status: "ok", users });
+        }
+      }
+    );
+  } catch (err) {
+    return res.json({ status: "error", message: err.message });
+  }
+};
+
+exports.editprofile = (req, res) => {
+    try {
+      const token = req.headers.authorization.split(" ")[1];
+      let decoded = jwt.verify(token, secret_token);
+      dbConn.query("UPDATE users SET fname = ?, lname = ? WHERE id = ?", [req.body.fname, req.body.lname, decoded.userId],
+        function (error, result) {
+          if(error){
+              return res.json({status:'error', message: err.message });
+          }else{
+              return res.json({status:'ok' , message: 'update success', result});
+          }
+        })
+    } catch (error) {
+        return res.json({ status: "error", message: err.message });
+    }
+};
+
+exports.chat = (req, res) => {};
