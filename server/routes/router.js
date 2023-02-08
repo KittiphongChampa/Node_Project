@@ -9,6 +9,8 @@ router.post("/verify_email", controller.verify_email);
 router.post("/login", controller.login);
 router.post("/index", controller.index);
 router.get("/profile", controller.profile);
+router.put("/addcover_img", controller.addcover_img);
+router.put("/updatecover_img", controller.updatecover_img);
 router.post("/editprofile", controller.editprofile);
 router.put("/updateprofile", controller.updateprofile);
 router.put("/updateprofile_img", controller.updateprofile_img);

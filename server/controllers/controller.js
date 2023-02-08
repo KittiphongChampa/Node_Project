@@ -254,6 +254,90 @@ exports.profile = (req, res) => {
   }
 };
 
+exports.addcover_img = (req, res) => {
+  try {
+    if (req.files === null) {
+      return res.json({ status: "error", message: "No File Uploaded" });
+    }
+    const file = req.files.file;
+    const token = req.headers.authorization.split(" ")[1];
+    let decoded = jwt.verify(token, secret_token);
+    dbConn.query(
+      "SELECT * FROM users WHERE id = ?",
+      [decoded.userId],
+      function (error, result) {
+        if(result){
+          var file_path = __dirname.split("controllers")[0] + "/public/images_cover/" + randomstring.generate(50) + ".jpg";
+          file.mv(file_path);
+          const image = file_path.split("/public")[1];
+          const cover = `${req.protocol}://${req.get("host")}${image}`;
+          dbConn.query(
+            "UPDATE users SET usr_cover_img = ? WHERE id = ?",
+            [cover, decoded.userId],
+            function (error, result) {
+              if (error) {
+                console.log("1");
+                return res.json({ status: "error", message: "เข้า error" });
+              } else {
+                return res.json({
+                  status: "ok",
+                  message: "update success",
+                });
+              }
+            }
+          );
+        }
+      }
+    );
+  } catch (error) {
+    console.log("2");
+    return res.json({ status: "error", message: error.message });
+  }
+};
+
+exports.updatecover_img = (req, res) => {
+  try {
+    if (req.files === null) {
+      return res.json({ status: "error", message: "No File Uploaded" });
+    }
+    const file = req.files.file;
+    const token = req.headers.authorization.split(" ")[1];
+    let decoded = jwt.verify(token, secret_token);
+    dbConn.query(
+      "SELECT * FROM users WHERE id = ?",
+      [decoded.userId],
+      function (error, result) {
+        const new_cover = result[0].usr_cover_img.split("images_cover/")[1];
+        var file_path =
+          __dirname.split("controllers")[0] +
+          "/public/images_cover/" +
+          new_cover;
+        file.mv(file_path);
+        const image = file_path.split("/public")[1];
+        const cover = `${req.protocol}://${req.get("host")}${image}`;
+        dbConn.query(
+          "UPDATE users SET usr_cover_img = ? WHERE id = ?",
+          [cover, decoded.userId],
+          function (error, result) {
+            if (error) {
+              console.log("1");
+              return res.json({ status: "error", message: "เข้า error" });
+            } else {
+              return res.json({
+                status: "ok",
+                message: "update success",
+              });
+            }
+          }
+        );
+      }
+    );
+  } catch (error) {
+    console.log("2");
+    return res.json({ status: "error", message: error.message });
+  }
+};
+
 exports.editprofile = (req, res) => {
   try {
     const token = req.headers.authorization.split(" ")[1];
@@ -279,22 +363,43 @@ exports.editprofile = (req, res) => {
 
 exports.updateprofile_img = (req, res) => {
   try {
-    if(req.files === null){
-      return res.json({status: "error", message: "No File Uploaded"});
+    if (req.files === null) {
+      return res.json({ status: "error", message: "No File Uploaded" });
     }
     const file = req.files.file;
-    console.log(file);
-
     const token = req.headers.authorization.split(" ")[1];
     let decoded = jwt.verify(token, secret_token);
     dbConn.query(
       "SELECT * FROM users WHERE id = ?",
       [decoded.userId],
       function (error, result) {
-        const new_profile = result[0].urs_profile_img .split("images/")[1];
-        var file_path = __dirname.split("controllers")[0] + "/public/images/" + new_profile;
-        file.mv(file_path);
-        return res.json({status: "ok", message: "update success" });
+        if(result[0].urs_profile_img === ""){
+          var filename_random =__dirname.split("controllers")[0] + "/public/images/" + randomstring.generate(50) + ".jpg";
+          file.mv(filename_random);
+          const image = filename_random.split("/public")[1];
+          const profile = `${req.protocol}://${req.get("host")}${image}`;
+          dbConn.query(
+            "UPDATE users SET urs_profile_img =? WHERE id = ? ",
+            [profile, decoded.userId],
+            function (error, results) {
+              if (error) {
+                return res.json({ status: "error", message: error.message });
+              } else {
+                return res.json({
+                  status: "ok",
+                  message: "add profile success",
+                });
+              }
+            }
+          );
+        }else{
+          const new_profile = result[0].urs_profile_img.split("images/")[1];
+          var file_path =
+            __dirname.split("controllers")[0] + "/public/images/" + new_profile;
+          file.mv(file_path);
+          return res.json({ status: "ok", message: "update success" });
+        }
+        
         // const image = file_path.split("/public")[1];
         // const profile = `${req.protocol}://${req.get("host")}${image}`;
         // dbConn.query(
@@ -371,7 +476,7 @@ exports.addbank = (req, res) => {
 
 exports.updatebank = (req, res) => {
   console.log(req.body);
-}
+};
 
 exports.delete_account = (req, res) => {
   try {
