@@ -1,9 +1,9 @@
 let mysql = require("mysql");
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 const saltRounds = 10;
 let jwt = require("jsonwebtoken");
 const secret_token = "mysecret_id_login";
-
 const randomstring = require("randomstring");
 const fs = require("fs");
 const nodemailer = require("nodemailer");
@@ -15,8 +15,34 @@ let dbConn = mysql.createConnection({
   password: "",
   database: "ProjectDB",
 });
-
 dbConn.connect();
+
+const algorithm = "aes-256-ctr";
+const password = "d6F3Efeq";
+function encrypt(urs_token) {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(
+    algorithm,
+    crypto.createHash("sha256").update(password).digest(),
+    iv
+  );
+  let encrypted = cipher.update(urs_token, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  return `${iv.toString("hex")}:${encrypted}`;
+}
+function decrypt(text) {
+  const parts = text.split(":");
+  const iv = Buffer.from(parts.shift(), "hex");
+  const encrypted = parts.join(":");
+  const decipher = crypto.createDecipheriv(
+    algorithm,
+    crypto.createHash("sha256").update(password).digest(),
+    iv
+  );
+  let decrypted = decipher.update(encrypted, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
 
 exports.test = (req, res) => {
   //   return res.send({ error: true, message: "Test project Web API" });
@@ -45,7 +71,7 @@ let otp = 0;
 
 exports.verify = (req, res) => {
   dbConn.query(
-    "SELECT * FROM users WHERE email = ?",
+    "SELECT * FROM users WHERE urs_email = ?",
     [req.body.email],
     function (error, result) {
       if (result.length >= 1) {
@@ -92,7 +118,7 @@ exports.verify_email = (req, res) => {
   let OTP = parseInt(req.body.otp);
   if (OTP === otp) {
     dbConn.query(
-      "INSERT INTO users (email) VALUES (?)",
+      "INSERT INTO users (urs_email) VALUES (?)",
       [req.body.email],
       function (error, results) {
         if (error) {
@@ -100,12 +126,12 @@ exports.verify_email = (req, res) => {
           return res.json({ status: "error", message: "เกิดข้อผืดพลาด" });
         } else {
           dbConn.query(
-            "SELECT * FROM users WHERE email=?",
+            "SELECT * FROM users WHERE urs_email=?",
             [req.body.email],
             function (error, users) {
               if (results) {
                 var token = jwt.sign(
-                  { email: users[0].email, userId: users[0].id },
+                  { email: users[0].urs_email, userId: users[0].id },
                   secret_token,
                   { expiresIn: "1h" }
                 ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
@@ -131,6 +157,10 @@ exports.verify_email = (req, res) => {
 };
 
 exports.register = (req, res) => {
+  const sum_token = 0;
+  const urs_token = sum_token.toString();
+  const urs_token_encrypted = encrypt(urs_token);
+
   if (req.files === null) {
     return res.json({ status: "error", message: "No File Uploaded" });
   }
@@ -163,8 +193,8 @@ exports.register = (req, res) => {
       const token = req.headers.authorization.split(" ")[1];
       let decoded = jwt.verify(token, secret_token);
       dbConn.query(
-        "UPDATE users SET password=?, username=?, urs_profile_img =? WHERE id = ? ",
-        [hash, req.body.username, profile, decoded.userId],
+        "UPDATE users SET urs_password=?, urs_name=?, urs_token=?, urs_profile_img =? WHERE id = ? ",
+        [hash, req.body.username, urs_token_encrypted, profile, decoded.userId],
         function (error, results) {
           if (error) {
             return res.json({ status: "error", message: error.message });
@@ -184,7 +214,7 @@ exports.register = (req, res) => {
 
 exports.login = (req, res) => {
   dbConn.query(
-    "SELECT * FROM users WHERE email=?",
+    "SELECT * FROM users WHERE urs_email=?",
     [req.body.email],
     function (error, users, fields) {
       if (error) {
@@ -195,11 +225,11 @@ exports.login = (req, res) => {
       }
       bcrypt.compare(
         req.body.password,
-        users[0].password,
+        users[0].urs_password,
         function (error, islogin) {
           if (islogin) {
             var token = jwt.sign(
-              { email: users[0].email, userId: users[0].id },
+              { email: users[0].urs_email, userId: users[0].id },
               secret_token,
               { expiresIn: "3h" }
             ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
@@ -221,9 +251,9 @@ exports.index = (req, res) => {
     dbConn.query(
       "SELECT * FROM users WHERE id=?",
       [decoded.userId],
-      function (error, users, fields) {
-        // console.log(users[0]);
-        return res.json({ status: "ok", users });
+      function (error, users) {
+        const urs_token = decrypt(users[0].urs_token);
+        return res.json({ status: "ok", users, urs_token });
       }
     );
   } catch (err) {
@@ -266,8 +296,12 @@ exports.addcover_img = (req, res) => {
       "SELECT * FROM users WHERE id = ?",
       [decoded.userId],
       function (error, result) {
-        if(result){
-          var file_path = __dirname.split("controllers")[0] + "/public/images_cover/" + randomstring.generate(50) + ".jpg";
+        if (result) {
+          var file_path =
+            __dirname.split("controllers")[0] +
+            "/public/images_cover/" +
+            randomstring.generate(50) +
+            ".jpg";
           file.mv(file_path);
           const image = file_path.split("/public")[1];
           const cover = `${req.protocol}://${req.get("host")}${image}`;
@@ -373,8 +407,12 @@ exports.updateprofile_img = (req, res) => {
       "SELECT * FROM users WHERE id = ?",
       [decoded.userId],
       function (error, result) {
-        if(result[0].urs_profile_img === ""){
-          var filename_random =__dirname.split("controllers")[0] + "/public/images/" + randomstring.generate(50) + ".jpg";
+        if (result[0].urs_profile_img === "") {
+          var filename_random =
+            __dirname.split("controllers")[0] +
+            "/public/images/" +
+            randomstring.generate(50) +
+            ".jpg";
           file.mv(filename_random);
           const image = filename_random.split("/public")[1];
           const profile = `${req.protocol}://${req.get("host")}${image}`;
@@ -392,14 +430,14 @@ exports.updateprofile_img = (req, res) => {
               }
             }
           );
-        }else{
+        } else {
           const new_profile = result[0].urs_profile_img.split("images/")[1];
           var file_path =
             __dirname.split("controllers")[0] + "/public/images/" + new_profile;
           file.mv(file_path);
           return res.json({ status: "ok", message: "update success" });
         }
-        
+
         // const image = file_path.split("/public")[1];
         // const profile = `${req.protocol}://${req.get("host")}${image}`;
         // dbConn.query(
@@ -430,7 +468,7 @@ exports.updateprofile = (req, res) => {
     const token = req.headers.authorization.split(" ")[1];
     let decoded = jwt.verify(token, secret_token);
     dbConn.query(
-      "UPDATE users SET username = ?, urs_bio=? WHERE id = ?",
+      "UPDATE users SET urs_name = ?, urs_bio=? WHERE id = ?",
       [req.body.username, req.body.bio, decoded.userId],
       function (error, result) {
         if (error) {
@@ -504,4 +542,110 @@ exports.delete_account = (req, res) => {
   }
 };
 
+exports.buytoken = (req, res) => {
+  try {
+    const token = req.headers.authorization.split(" ")[1];
+    let decoded = jwt.verify(token, secret_token);
+    dbConn.query(
+      "SELECT * FROM users WHERE id=?",
+      [decoded.userId],
+      function (error, users) {
+        if (error) {
+          return res.json({ status: "error", message: "เข้า error" });
+        } else {
+          dbConn.query(
+            "SELECT * FROM package",
+            function (error, package_token) {
+              // console.log(package_token);
+              if (error) {
+                return res.json({ status: "error", message: "เข้า error" });
+              } else {
+                return res.json({ status: "ok", package_token, users });
+              }
+            }
+          );
+        }
+      }
+    );
+  } catch (err) {
+    return res.json({ status: "error", message: "เข้า catch" });
+  }
+};
+
+exports.updatetoken = (req, res) => {
+  console.log(req.body);
+  try {
+    const id = req.body.id;
+    const id_transaction = req.body.id_transaction;
+    const old_tokens = req.body.urs_token;
+    const old_token = decrypt(old_tokens);
+    const old_token_int = parseInt(old_token);
+    const token = req.body.amount;
+    let new_token = token / 100;
+    let sum_token = old_token_int + new_token;
+    const urs_token = sum_token.toString();
+    const urs_token_encrypted = encrypt(urs_token);
+    // console.log("เข้า try");
+    dbConn.query(
+      "UPDATE users SET urs_token = ? WHERE id = ?",
+      [urs_token_encrypted, id],
+      function (error, result) {
+        if (error) {
+          console.log("1");
+          return res.json({ status: "error", message: "เข้า error" });
+        } else {
+          dbConn.query(
+            "INSERT INTO transaction_history (usr_id, package_id) VALUES (?, ?)",[req.body.id, id_transaction]
+          );
+          return res.json({
+            status: "ok",
+            message: "ซื้อเหรียญ สำเร็จ",
+            result,
+          });
+        }
+      }
+    );
+  } catch (err) {
+    return res.json({ status: "error", message: "เข้า catch" });
+  }
+};
+
 exports.chat = (req, res) => {};
+
+exports.testinput = (req, res) => {
+  const algorithm = "aes-256-ctr";
+  const password = "d6F3Efeq";
+  // console.log(req.body.inputtext);
+  const text = req.body.inputtext;
+
+  function encrypt(text) {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(
+      algorithm,
+      crypto.createHash("sha256").update(password).digest(),
+      iv
+    );
+    let encrypted = cipher.update(text, "utf8", "hex");
+    encrypted += cipher.final("hex");
+    return `${iv.toString("hex")}:${encrypted}`;
+  }
+
+  function decrypt(text) {
+    const parts = text.split(":");
+    const iv = Buffer.from(parts.shift(), "hex");
+    const encrypted = parts.join(":");
+    const decipher = crypto.createDecipheriv(
+      algorithm,
+      crypto.createHash("sha256").update(password).digest(),
+      iv
+    );
+    let decrypted = decipher.update(encrypted, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  }
+
+  const encrypted = encrypt(text);
+  console.log("Encrypted text: ", encrypted);
+  const decrypted = decrypt(encrypted);
+  console.log("Decrypted text: ", decrypted);
+};
