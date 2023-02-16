@@ -23,8 +23,10 @@ router.put("/updatebank", controller.updatebank);
 router.delete("/delete_account", controller.delete_account);
 router.get("/buytoken", controller.buytoken);
 router.put("/updatetoken", controller.updatetoken);
+router.get("/transaction", controller.transaction);
 
-router.post("/testinput", controller.testinput);
+router.get("/testinput/:id", controller.testinput);
+// router.get("/testinput", controller.testinput);
 
 router.post("/chat", controller.chat);
 

@@ -9,6 +9,7 @@ const fs = require("fs");
 const nodemailer = require("nodemailer");
 
 process.env.TZ = "Asia/bangkok";
+
 let dbConn = mysql.createConnection({
   host: "localhost",
   user: "root",
@@ -131,7 +132,10 @@ exports.verify_email = (req, res) => {
             function (error, users) {
               if (results) {
                 var token = jwt.sign(
-                  { email: users[0].urs_email, userId: users[0].id },
+                  { email: users[0].urs_email,
+                    userId: users[0].id,
+                    role: users[0].urs_type
+                   },
                   secret_token,
                   { expiresIn: "1h" }
                 ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
@@ -595,7 +599,8 @@ exports.updatetoken = (req, res) => {
           return res.json({ status: "error", message: "เข้า error" });
         } else {
           dbConn.query(
-            "INSERT INTO transaction_history (usr_id, package_id) VALUES (?, ?)",[req.body.id, id_transaction]
+            "INSERT INTO transaction_history (usr_id, package_id) VALUES (?, ?)",
+            [req.body.id, id_transaction]
           );
           return res.json({
             status: "ok",
@@ -610,42 +615,39 @@ exports.updatetoken = (req, res) => {
   }
 };
 
+exports.transaction = (req, res) => {
+  try {
+    const token = req.headers.authorization.split(" ")[1];
+    let decoded = jwt.verify(token, secret_token);
+    dbConn.query(
+      "SELECT * FROM transaction_history JOIN users ON transaction_history.usr_id = users.id JOIN package ON transaction_history.package_id = package.id WHERE users.id=?",[decoded.userId],
+      function (error, results) {
+        if (error) {
+          return res.json({ status: "error", message: "เข้า error" });
+        } else {
+          console.log(results);
+          return res.json({ status: "ok", results });
+        }
+      }
+    );
+  } catch (error) {
+    return res.json({ status: "error", message: "เข้า catch" });
+  }
+}
+
 exports.chat = (req, res) => {};
 
 exports.testinput = (req, res) => {
-  const algorithm = "aes-256-ctr";
-  const password = "d6F3Efeq";
-  // console.log(req.body.inputtext);
-  const text = req.body.inputtext;
-
-  function encrypt(text) {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv(
-      algorithm,
-      crypto.createHash("sha256").update(password).digest(),
-      iv
-    );
-    let encrypted = cipher.update(text, "utf8", "hex");
-    encrypted += cipher.final("hex");
-    return `${iv.toString("hex")}:${encrypted}`;
-  }
-
-  function decrypt(text) {
-    const parts = text.split(":");
-    const iv = Buffer.from(parts.shift(), "hex");
-    const encrypted = parts.join(":");
-    const decipher = crypto.createDecipheriv(
-      algorithm,
-      crypto.createHash("sha256").update(password).digest(),
-      iv
-    );
-    let decrypted = decipher.update(encrypted, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-    return decrypted;
-  }
-
-  const encrypted = encrypt(text);
-  console.log("Encrypted text: ", encrypted);
-  const decrypted = decrypt(encrypted);
-  console.log("Decrypted text: ", decrypted);
+  // console.log(req.params.id);
+  const test = req.params.id
+  dbConn.query(
+    "SELECT * FROM transaction_history JOIN users ON transaction_history.usr_id = users.id JOIN package ON transaction_history.package_id = package.id WHERE users.id=?",[test],
+    function (error, results) {
+      if (error) {
+        return res.json({ status: "error", message: "เข้า error" });
+      } else {
+        console.log(results);
+      }
+    }
+  );
 };
