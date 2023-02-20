@@ -46,26 +46,35 @@ function decrypt(text) {
 }
 
 exports.test = (req, res) => {
-  //   return res.send({ error: true, message: "Test project Web API" });
-  let mailOptions = {
-    from: "ktpyun@gmail.com",
-    to: req.body.email,
-    subject: "Email Verification",
-    text:
-      "<h3>OTP to verify your email is </h3>" +
-      "<h1 style='font-weight:bold;'>" +
-      otp +
-      "</h1>",
-  };
-  transporter.sendMail(mailOptions, function (error, info) {
-    if (error) {
-      console.log("error", error);
-      return res.send({ error: true, message: "Failed" });
-    } else {
-      console.log("Email sent: " + info.response);
-      res.render("otp");
-    }
-  });
+  try {
+    const userId = req.user.userId;
+    // console.log(userId);
+    const role = req.user.role;
+    dbConn.query(
+      "SELECT * FROM users WHERE id=?",
+      [userId],
+      function (error, result) {
+        if (result[0].id !== userId) {
+          return res.json({ status: "error", message: "ไม่พบผู้ใช้" });
+        }
+        if (result[0].urs_type === undefined || result[0].urs_type !== 3) {
+          console.log('เข้า no_access');
+          return res.json({
+            status: "no_access",
+            message: "ไม่มีสิทธิเข้าถึง",
+          });
+        }
+        if (error) {
+          console.log('เข้า error');
+          return res.json({ status: "error", message: error.message });
+        }
+        return res.json({ status: "ok", message: "isAdmin", result });
+      }
+    );
+  } catch {
+    console.log('เข้า catch');
+    return res.json({ status: "error", message: error.message });
+  }
 };
 
 let otp = 0;
@@ -132,10 +141,11 @@ exports.verify_email = (req, res) => {
             function (error, users) {
               if (results) {
                 var token = jwt.sign(
-                  { email: users[0].urs_email,
+                  {
+                    email: users[0].urs_email,
                     userId: users[0].id,
-                    role: users[0].urs_type
-                   },
+                    role: users[0].urs_type,
+                  },
                   secret_token,
                   { expiresIn: "1h" }
                 ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
@@ -233,7 +243,11 @@ exports.login = (req, res) => {
         function (error, islogin) {
           if (islogin) {
             var token = jwt.sign(
-              { email: users[0].urs_email, userId: users[0].id },
+              {
+                email: users[0].urs_email,
+                userId: users[0].id,
+                role: users[0].urs_type,
+              },
               secret_token,
               { expiresIn: "3h" }
             ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
@@ -248,14 +262,16 @@ exports.login = (req, res) => {
 };
 
 exports.index = (req, res) => {
+  const userId = req.user.userId;
+  // const role = req.user.role;
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
-    // console.log(decoded.userId);
     dbConn.query(
       "SELECT * FROM users WHERE id=?",
-      [decoded.userId],
+      [userId],
       function (error, users) {
+        if (users[0].id !== userId) {
+          return res.json({ status: "error", message: "ไม่พบผู้ใช้" });
+        }
         const urs_token = decrypt(users[0].urs_token);
         return res.json({ status: "ok", users, urs_token });
       }
@@ -266,13 +282,11 @@ exports.index = (req, res) => {
 };
 
 exports.profile = (req, res) => {
+  const userId = req.user.userId;
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
-    // const test = req.params.id;
     dbConn.query(
       "SELECT * FROM users WHERE id=?",
-      [decoded.userId],
+      [userId],
       // [test],
       function (error, users) {
         if (error) {
@@ -288,19 +302,18 @@ exports.profile = (req, res) => {
   }
 };
 
-exports.addcover_img = (req, res) => {
+exports.add_cover_img = (req, res) => {
+  const userId = req.user.userId;
   try {
     if (req.files === null) {
       return res.json({ status: "error", message: "No File Uploaded" });
     }
     const file = req.files.file;
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
     dbConn.query(
       "SELECT * FROM users WHERE id = ?",
-      [decoded.userId],
-      function (error, result) {
-        if (result) {
+      [userId],
+      function (error, results) {
+        if (results) {
           var file_path =
             __dirname.split("controllers")[0] +
             "/public/images_cover/" +
@@ -311,17 +324,16 @@ exports.addcover_img = (req, res) => {
           const cover = `${req.protocol}://${req.get("host")}${image}`;
           dbConn.query(
             "UPDATE users SET usr_cover_img = ? WHERE id = ?",
-            [cover, decoded.userId],
+            [cover, userId],
             function (error, result) {
               if (error) {
                 console.log("1");
                 return res.json({ status: "error", message: "เข้า error" });
-              } else {
-                return res.json({
-                  status: "ok",
-                  message: "update success",
-                });
               }
+              return res.json({
+                status: "ok",
+                message: "update success",
+              });
             }
           );
         }
@@ -333,17 +345,16 @@ exports.addcover_img = (req, res) => {
   }
 };
 
-exports.updatecover_img = (req, res) => {
+exports.update_cover_img = (req, res) => {
+  const userId = req.user.userId;
   try {
     if (req.files === null) {
       return res.json({ status: "error", message: "No File Uploaded" });
     }
     const file = req.files.file;
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
     dbConn.query(
       "SELECT * FROM users WHERE id = ?",
-      [decoded.userId],
+      [userId],
       function (error, result) {
         const new_cover = result[0].usr_cover_img.split("images_cover/")[1];
         var file_path =
@@ -355,7 +366,7 @@ exports.updatecover_img = (req, res) => {
         const cover = `${req.protocol}://${req.get("host")}${image}`;
         dbConn.query(
           "UPDATE users SET usr_cover_img = ? WHERE id = ?",
-          [cover, decoded.userId],
+          [cover, userId],
           function (error, result) {
             if (error) {
               console.log("1");
@@ -377,13 +388,11 @@ exports.updatecover_img = (req, res) => {
 };
 
 exports.editprofile = (req, res) => {
+  const userId = req.user.userId;
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
-    // const test = req.params.id;
     dbConn.query(
       "SELECT * FROM users WHERE id=?",
-      [decoded.userId],
+      [userId],
       // [test],
       function (error, users) {
         if (error) {
@@ -399,17 +408,16 @@ exports.editprofile = (req, res) => {
   }
 };
 
-exports.updateprofile_img = (req, res) => {
+exports.update_profile_img = (req, res) => {
+  const userId = req.user.userId;
   try {
     if (req.files === null) {
       return res.json({ status: "error", message: "No File Uploaded" });
     }
     const file = req.files.file;
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
     dbConn.query(
       "SELECT * FROM users WHERE id = ?",
-      [decoded.userId],
+      [userId],
       function (error, result) {
         if (result[0].urs_profile_img === "") {
           var filename_random =
@@ -422,7 +430,7 @@ exports.updateprofile_img = (req, res) => {
           const profile = `${req.protocol}://${req.get("host")}${image}`;
           dbConn.query(
             "UPDATE users SET urs_profile_img =? WHERE id = ? ",
-            [profile, decoded.userId],
+            [profile, userId],
             function (error, results) {
               if (error) {
                 return res.json({ status: "error", message: error.message });
@@ -441,12 +449,11 @@ exports.updateprofile_img = (req, res) => {
           file.mv(file_path);
           return res.json({ status: "ok", message: "update success" });
         }
-
         // const image = file_path.split("/public")[1];
         // const profile = `${req.protocol}://${req.get("host")}${image}`;
         // dbConn.query(
         //   "UPDATE users SET urs_profile_img = ? WHERE id = ?",
-        //   [profile, decoded.userId],
+        //   [profile, userId],
         //   function (error, result) {
         //     if (error) {
         //       console.log("1");
@@ -467,13 +474,14 @@ exports.updateprofile_img = (req, res) => {
   }
 };
 
-exports.updateprofile = (req, res) => {
+exports.update_profile = (req, res) => {
+  const userId = req.user.userId;
+  const username = req.body.username;
+  const bio = req.body.bio;
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
     dbConn.query(
       "UPDATE users SET urs_name = ?, urs_bio=? WHERE id = ?",
-      [req.body.username, req.body.bio, decoded.userId],
+      [username, bio, userId],
       function (error, result) {
         if (error) {
           console.log("1");
@@ -493,14 +501,15 @@ exports.updateprofile = (req, res) => {
   }
 };
 
-exports.addbank = (req, res) => {
-  console.log(req.body);
+exports.add_bank = (req, res) => {
+  const userId = req.user.userId;
+  const bank_username = req.body.bankuser;
+  const bankname = req.body.bankname;
+  const banknum = req.body.banknum;
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
     dbConn.query(
       "UPDATE users SET urs_bank_name = ?, urs_bank_accname=?, urs_bank_number=? WHERE id = ?",
-      [req.body.bankuser, req.body.bankname, req.body.banknum, decoded.userId],
+      [bank_username, bankname, banknum, userId],
       function (error, result) {
         if (error) {
           console.log("1");
@@ -516,19 +525,17 @@ exports.addbank = (req, res) => {
   }
 };
 
-exports.updatebank = (req, res) => {
+exports.update_bank = (req, res) => {
   console.log(req.body);
 };
 
 exports.delete_account = (req, res) => {
+  const userId = req.user.userId;
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
     // const user_id = req.params.id;
     dbConn.query(
       "DELETE FROM users WHERE id = ?",
-      [decoded.userId],
-      // [user_id],
+      [userId],
       function (error, results) {
         if (error) {
           return res.json({ status: "error", message: "เข้า error" });
@@ -547,12 +554,11 @@ exports.delete_account = (req, res) => {
 };
 
 exports.buytoken = (req, res) => {
+  const userId = req.user.userId;
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
     dbConn.query(
       "SELECT * FROM users WHERE id=?",
-      [decoded.userId],
+      [userId],
       function (error, users) {
         if (error) {
           return res.json({ status: "error", message: "เข้า error" });
@@ -560,7 +566,6 @@ exports.buytoken = (req, res) => {
           dbConn.query(
             "SELECT * FROM package",
             function (error, package_token) {
-              // console.log(package_token);
               if (error) {
                 return res.json({ status: "error", message: "เข้า error" });
               } else {
@@ -576,7 +581,7 @@ exports.buytoken = (req, res) => {
   }
 };
 
-exports.updatetoken = (req, res) => {
+exports.update_token = (req, res) => {
   console.log(req.body);
   try {
     const id = req.body.id;
@@ -616,32 +621,54 @@ exports.updatetoken = (req, res) => {
 };
 
 exports.transaction = (req, res) => {
+  const userId = req.user.userId;
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    let decoded = jwt.verify(token, secret_token);
     dbConn.query(
-      "SELECT * FROM transaction_history JOIN users ON transaction_history.usr_id = users.id JOIN package ON transaction_history.package_id = package.id WHERE users.id=?",[decoded.userId],
+      "SELECT * FROM transaction_history JOIN users ON transaction_history.usr_id = users.id JOIN package ON transaction_history.package_id = package.id WHERE users.id=?",
+      [userId],
       function (error, results) {
-        if (error) {
-          return res.json({ status: "error", message: "เข้า error" });
-        } else {
+        if (results) {
           console.log(results);
           return res.json({ status: "ok", results });
+        } else {
+          return res.json({ status: "error", message: error });
         }
       }
     );
   } catch (error) {
     return res.json({ status: "error", message: "เข้า catch" });
   }
-}
+};
 
 exports.chat = (req, res) => {};
 
+exports.package_token = (req, res) => {
+  try{
+    dbConn.query(
+      "SELECT * FROM package",
+      function (error, results) {
+        if(results){
+          return res.json({ status: "ok", message: "isAdmin", results });
+        }else{
+          return res.json({ status: "error", message: error });
+        }
+      }
+    );
+  }catch{
+    return res.json({ status: "error", message: error.message });
+  }
+};
+
+exports.add_package_token = (req, res) => {};
+exports.update_package_token = (req, res) => {};
+exports.delete_package_token = (req, res) => {};
+
 exports.testinput = (req, res) => {
   // console.log(req.params.id);
-  const test = req.params.id
+  const test = req.params.id;
   dbConn.query(
-    "SELECT * FROM transaction_history JOIN users ON transaction_history.usr_id = users.id JOIN package ON transaction_history.package_id = package.id WHERE users.id=?",[test],
+    "SELECT * FROM transaction_history JOIN users ON transaction_history.usr_id = users.id JOIN package ON transaction_history.package_id = package.id WHERE users.id=?",
+    [test],
     function (error, results) {
       if (error) {
         return res.json({ status: "error", message: "เข้า error" });
