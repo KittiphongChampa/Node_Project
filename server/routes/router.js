@@ -7,8 +7,12 @@ var omise = require("omise")({
   secretKey: "skey_test_5po2mluair6jdcygy04",
 });
 
+//Test
+router.get("/test", auth.verifyToken, auth.adminOnly, controller.test);
+router.post("/testlogin", controller.testlogin);
+router.get("/testfinddelete", controller.testfind_delete);
 //ยังไม่มี token
-router.put("/register", controller.register);
+router.post("/register", controller.register);
 router.post("/verify", controller.verify);
 router.post("/verify/email", controller.verify_email);
 router.post("/login", controller.login);
@@ -22,22 +26,21 @@ router.get("/transaction", auth.verifyToken, controller.transaction);
 
 router.put("/cover_img/add", auth.verifyToken, controller.add_cover_img);
 router.put("/cover_img/update", auth.verifyToken, controller.update_cover_img);
-router.put("/profile/update", auth.verifyToken, controller.update_profile);
+router.patch("/profile/update", auth.verifyToken, controller.update_profile);
 router.put("/profile_img/update", auth.verifyToken, controller.update_profile_img);
 router.post("/bank/add", auth.verifyToken, controller.add_bank);
-router.put("/bank/update", auth.verifyToken, controller.update_bank);
-router.delete("/delete_account", auth.verifyToken, controller.delete_account);
+router.patch("/bank/update", auth.verifyToken, controller.update_bank);
+router.put("/delete_account", auth.verifyToken, controller.delete_account);
 router.put("/token/update", controller.update_token);
 router.post("/chat", auth.verifyToken, controller.chat);
 router.get("/testinput/:id", controller.testinput);
 // router.get("/testinput", controller.testinput);
 
 //admin
-router.get("/test", auth.verifyToken, auth.adminOnly, controller.test);
 router.get("/packagetoken", auth.verifyToken, auth.adminOnly, controller.package_token);
-router.post("/packagetoken/add", auth.verifyToken, auth.adminOnly, controller.add_package_token);
-router.put("/packagetoken/update", auth.verifyToken, auth.adminOnly, controller.update_package_token);
-router.put("/packagetoken/delete", auth.verifyToken, auth.adminOnly, controller.delete_package_token);
+router.post("/packagetoken/add", controller.add_package_token);
+router.patch("/packagetoken/update/:id", controller.update_package_token);
+router.put("/packagetoken/delete/:id", controller.delete_package_token);
 
 router.post("/omiseAPI", async (req, res, next) => {
   const { email, name, amount, token } = req.body;

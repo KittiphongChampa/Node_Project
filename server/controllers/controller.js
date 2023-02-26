@@ -1,3 +1,4 @@
+
 let mysql = require("mysql");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
@@ -8,8 +9,6 @@ const randomstring = require("randomstring");
 const fs = require("fs");
 const nodemailer = require("nodemailer");
 
-process.env.TZ = "Asia/bangkok";
-
 let dbConn = mysql.createConnection({
   host: "localhost",
   user: "root",
@@ -17,6 +16,12 @@ let dbConn = mysql.createConnection({
   database: "ProjectDB",
 });
 dbConn.connect();
+
+let otp = 0;
+
+let date = new Date();
+let options = { timeZone: 'Asia/Bangkok' };
+let bangkokTime = date.toLocaleString('en-US', options);
 
 const algorithm = "aes-256-ctr";
 const password = "d6F3Efeq";
@@ -58,26 +63,73 @@ exports.test = (req, res) => {
           return res.json({ status: "error", message: "ไม่พบผู้ใช้" });
         }
         if (result[0].urs_type === undefined || result[0].urs_type !== 3) {
-          console.log('เข้า no_access');
+          console.log("เข้า no_access");
           return res.json({
             status: "no_access",
             message: "ไม่มีสิทธิเข้าถึง",
           });
         }
         if (error) {
-          console.log('เข้า error');
+          console.log("เข้า error");
           return res.json({ status: "error", message: error.message });
         }
         return res.json({ status: "ok", message: "isAdmin", result });
       }
     );
   } catch {
-    console.log('เข้า catch');
+    console.log("เข้า catch");
     return res.json({ status: "error", message: error.message });
   }
 };
 
-let otp = 0;
+exports.testlogin = (req, res) => {
+  dbConn.query(
+    "SELECT * FROM users WHERE urs_email=?",
+    [req.body.email],
+    function (error, users) {
+      if (users[0].deleted_at !== null){
+        return res.json({ status: "hasDelete", message: "User has deleted"})
+      }
+      if (error) {
+        return res.json({ status: "error", message: error });
+      }
+      if (users.length == 0) {
+        return res.json({ status: "error", message: "no user found" });
+      }
+      bcrypt.compare(
+        req.body.password,
+        users[0].urs_password,
+        function (error, islogin) {
+          if (islogin) {
+            var token = jwt.sign(
+              {
+                email: users[0].urs_email,
+                userId: users[0].id,
+                role: users[0].urs_type,
+              },
+              secret_token,
+              { expiresIn: "3h" }
+            ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
+            return res.json({ status: "ok", message: "login success", token });
+          } else {
+            return res.json({ status: "error", message: "login failed" });
+          }
+        }
+      );
+    }
+  );
+}
+
+exports.testfind_delete = (req, res) => {
+  dbConn.query(
+    "SELECT * FROM users",
+    function (error, results) {
+      console.log(results);
+      console.log(results[2].deleted_at);
+      res.json(results[2].deleted_at)
+    }
+  );
+}
 
 exports.verify = (req, res) => {
   dbConn.query(
@@ -125,46 +177,47 @@ exports.verify = (req, res) => {
 };
 
 exports.verify_email = (req, res) => {
+  const email = req.body.email;
   let OTP = parseInt(req.body.otp);
   if (OTP === otp) {
+    // dbConn.query(
+    //   "INSERT INTO users (urs_email) VALUES (?)",
+    //   [email],
+    //   function (error, results) {
+    //     if (error) {
+    //       console.log("เข้า error");
+    //       return res.json({ status: "error", message: "เกิดข้อผิดพลาด" });
+    //     } else {
     dbConn.query(
-      "INSERT INTO users (urs_email) VALUES (?)",
-      [req.body.email],
-      function (error, results) {
-        if (error) {
-          console.log("เข้า error");
-          return res.json({ status: "error", message: "เกิดข้อผืดพลาด" });
+      "SELECT * FROM users WHERE urs_email=?",
+      [email],
+      function (error, users) {
+        if (users) {
+          // var token = jwt.sign(
+          //   {
+          //     email: users[0].urs_email,
+          //     userId: users[0].id,
+          //     role: users[0].urs_type,
+          //   },
+          //   secret_token,
+          //   { expiresIn: "1h" }
+          // ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
+          return res.json({
+            status: "ok",
+            message: "verify email success",
+            // token,
+          });
         } else {
-          dbConn.query(
-            "SELECT * FROM users WHERE urs_email=?",
-            [req.body.email],
-            function (error, users) {
-              if (results) {
-                var token = jwt.sign(
-                  {
-                    email: users[0].urs_email,
-                    userId: users[0].id,
-                    role: users[0].urs_type,
-                  },
-                  secret_token,
-                  { expiresIn: "1h" }
-                ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
-                return res.json({
-                  status: "ok",
-                  message: "verify email success",
-                  token,
-                });
-              } else {
-                return res.json({
-                  status: "error",
-                  message: "verify email failed",
-                });
-              }
-            }
-          );
+          return res.json({
+            status: "error",
+            message: "verify email failed",
+          });
         }
       }
     );
+    //     }
+    //   }
+    // );
   } else {
     res.json({ status: "error", message: "otp is incorrect" });
   }
@@ -194,6 +247,7 @@ exports.register = (req, res) => {
   } else {
     file.mv(filename_random);
   }
+  const email = req.body.email;
   const image = filename_random.split("/public")[1];
   const profile = `${req.protocol}://${req.get("host")}${image}`;
   bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
@@ -204,21 +258,40 @@ exports.register = (req, res) => {
         message: "Register failed",
       });
     } else {
-      const token = req.headers.authorization.split(" ")[1];
-      let decoded = jwt.verify(token, secret_token);
       dbConn.query(
-        "UPDATE users SET urs_password=?, urs_name=?, urs_token=?, urs_profile_img =? WHERE id = ? ",
-        [hash, req.body.username, urs_token_encrypted, profile, decoded.userId],
+        "INSERT INTO users SET urs_email=?, urs_password=?, urs_name=?, urs_token=?, urs_profile_img=?",
+        [email, hash, req.body.username, urs_token_encrypted, profile],
         function (error, results) {
           if (error) {
             return res.json({ status: "error", message: error.message });
           } else {
-            return res.json({
-              status: "ok",
-              message: "Register success",
-              results,
-              token,
-            });
+            dbConn.query(
+              "SELECT * FROM users WHERE urs_email=?",
+              [email],
+              function (error, users) {
+                if (users) {
+                  var token = jwt.sign(
+                    {
+                      email: users[0].urs_email,
+                      userId: users[0].id,
+                      role: users[0].urs_type,
+                    },
+                    secret_token,
+                    { expiresIn: "1h" }
+                  ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
+                  return res.json({
+                    status: "ok",
+                    message: "Register success",
+                    token,
+                  });
+                } else {
+                  return res.json({
+                    status: "error",
+                    message: "Register failed",
+                  });
+                }
+              }
+            );
           }
         }
       );
@@ -230,7 +303,10 @@ exports.login = (req, res) => {
   dbConn.query(
     "SELECT * FROM users WHERE urs_email=?",
     [req.body.email],
-    function (error, users, fields) {
+    function (error, users) {
+      if (users[0].deleted_at !== null){
+        return res.json({ status: "hasDelete", message: "User has deleted"})
+      }
       if (error) {
         return res.json({ status: "error", message: error });
       }
@@ -249,8 +325,8 @@ exports.login = (req, res) => {
                 role: users[0].urs_type,
               },
               secret_token,
-              { expiresIn: "3h" }
-            ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
+              // { expiresIn: "3h" }
+            ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 3 ชม
             return res.json({ status: "ok", message: "login success", token });
           } else {
             return res.json({ status: "error", message: "login failed" });
@@ -262,6 +338,9 @@ exports.login = (req, res) => {
 };
 
 exports.index = (req, res) => {
+  // console.log(date);
+  // console.log(bangkokTime);
+
   const userId = req.user.userId;
   // const role = req.user.role;
   try {
@@ -476,7 +555,7 @@ exports.update_profile_img = (req, res) => {
 
 exports.update_profile = (req, res) => {
   const userId = req.user.userId;
-  const username = req.body.username;
+  const username = req.body.name;
   const bio = req.body.bio;
   try {
     dbConn.query(
@@ -526,24 +605,46 @@ exports.add_bank = (req, res) => {
 };
 
 exports.update_bank = (req, res) => {
-  console.log(req.body);
+  const userId = req.user.userId;
+  const bank_username = req.body.bankuser;
+  const bankname = req.body.bankname;
+  const banknum = req.body.banknum;
+  try {
+    dbConn.query(
+      "UPDATE users SET urs_bank_name = ?, urs_bank_accname=?, urs_bank_number=? WHERE id = ?",
+      [bank_username, bankname, banknum, userId],
+      function (error, result) {
+        if (error) {
+          return res.json({ status: "error", message: "เข้า error" });
+        } else {
+          return res.json({ status: "ok", message: "update success", result });
+        }
+      }
+    );
+  } catch (error) {
+    return res.json({ status: "error", message: error.message });
+  }
 };
 
 exports.delete_account = (req, res) => {
+  // const token = req.headers.authorization.split(" ")[1];
+  // let decoded = jwt.verify(token, secret_token);
+  // console.log(req.body);
   const userId = req.user.userId;
+  console.log(userId);
   try {
-    // const user_id = req.params.id;
     dbConn.query(
-      "DELETE FROM users WHERE id = ?",
-      [userId],
+      "UPDATE users SET deleted_at = ? WHERE id = ?",
+      [date, userId],
       function (error, results) {
         if (error) {
+          console.log("1");
           return res.json({ status: "error", message: "เข้า error" });
         } else {
           return res.json({
             status: "ok",
-            results,
             message: "User successfully deleted.",
+            results,
           });
         }
       }
@@ -590,11 +691,10 @@ exports.update_token = (req, res) => {
     const old_token = decrypt(old_tokens);
     const old_token_int = parseInt(old_token);
     const token = req.body.amount;
-    let new_token = token / 100;
-    let sum_token = old_token_int + new_token;
+    // let new_token = token / 100;
+    let sum_token = old_token_int + token;
     const urs_token = sum_token.toString();
     const urs_token_encrypted = encrypt(urs_token);
-    // console.log("เข้า try");
     dbConn.query(
       "UPDATE users SET urs_token = ? WHERE id = ?",
       [urs_token_encrypted, id],
@@ -643,25 +743,74 @@ exports.transaction = (req, res) => {
 exports.chat = (req, res) => {};
 
 exports.package_token = (req, res) => {
-  try{
-    dbConn.query(
-      "SELECT * FROM package",
-      function (error, results) {
-        if(results){
-          return res.json({ status: "ok", message: "isAdmin", results });
-        }else{
-          return res.json({ status: "error", message: error });
-        }
+  try {
+    dbConn.query("SELECT * FROM package WHERE deleted_at IS NULL", function (error, results) {
+      if (results) {
+        return res.json({ status: "ok", results });
+      } else {
+        return res.json({ status: "error", message: error });
       }
-    );
-  }catch{
+    });
+  } catch {
+    console.log('catch');
     return res.json({ status: "error", message: error.message });
   }
 };
 
-exports.add_package_token = (req, res) => {};
-exports.update_package_token = (req, res) => {};
-exports.delete_package_token = (req, res) => {};
+exports.add_package_token = (req, res) => {
+  const { packageName, coins, price } = req.body;
+  try{
+    dbConn.query(
+      "INSERT INTO package (package, p_price, p_token) VALUES (?, ?, ?)",[packageName, price, coins],
+      function(error, results){
+        if (results) {
+          return res.json({ status: "ok", message: "เพิ่มข้อมูลแพ็คเกจการเติมเงินสำเร็จ",  results})
+        }else{
+          return res.json({ status: "error", message: error.message });
+        }
+      }
+    );
+  }catch{
+    return res.json({ status: "error", message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง" });
+  }
+};
+
+exports.update_package_token = (req, res) => {
+  const packageId = req.params.id;
+  const {packageName, coins, price} = req.body;
+  try{
+    dbConn.query(
+      "UPDATE package SET package = ?, p_price=?, p_token=?  WHERE id = ?", [packageName, price, coins, packageId], 
+      function(error, results){
+        if (results) {
+          return res.json({ status: "ok", message: "แก้ไขข้อมูลแพ็คเกจการเติมเงินสำเร็จ"})
+        } else {
+          return res.json({ status: "error", message: error });
+        }
+      }
+    )
+  }catch{
+    return res.json({ status: "error", message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง" });
+  }
+};
+
+exports.delete_package_token = (req, res) => {
+  const packageId = req.params.id;
+  try{
+    dbConn.query(
+      "UPDATE package SET deleted_at = ? WHERE id = ?", [date, packageId], 
+      function(error, results){
+        if (results) {
+          return res.json({ status: "ok", message: "ลบแพ็คเกจการเติมเงินสำเร็จ"})
+        } else {
+          return res.json({ status: "error", message: error });
+        }
+      }
+    )
+  }catch{
+    return res.json({ status: "error", message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง" });
+  }
+};
 
 exports.testinput = (req, res) => {
   // console.log(req.params.id);

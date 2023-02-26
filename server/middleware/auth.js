@@ -12,17 +12,36 @@ dbConn.connect();
 // const config = process.env;
 
 exports.verifyToken = (req, res, next) => {
+  // const token =
+  //   req.body.token ||
+  //   req.query.token ||
+  //   req.headers["x-access-token"] ||
+  //   req.headers.authorization.split(" ")[1];
+  // console.log(token);
+  // if (!token) {
+  //   return res.status(403).json({ message: "กรุณาเข้าสู่ระบบ" });
+  // }
+  // try {
+  //   let decoded = jwt.verify(token, secret_token);
+  //   const user = decoded;
+  //   req.user = user;
+  //   next();
+  // } catch {
+  //   return res.status(401).send("Invalid Token");
+  // }
   const token =
     req.body.token ||
     req.query.token ||
     req.headers["x-access-token"] ||
-    req.headers.authorization.split(" ")[1];
+    (req.headers.authorization && req.headers.authorization.split(" ")[1]);
+
   if (!token) {
     return res.status(403).json({ message: "กรุณาเข้าสู่ระบบ" });
   }
   try {
     let decoded = jwt.verify(token, secret_token);
     const user = decoded;
+    // console.log(user);
     req.user = user;
     next();
   } catch {
