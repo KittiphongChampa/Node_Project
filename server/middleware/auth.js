@@ -1,5 +1,6 @@
 let jwt = require("jsonwebtoken");
-const secret_token = "mysecret_id_login";
+// const secret_token = "mysecret_id_login";
+const secret_token = "mysecret_id";
 let mysql = require("mysql");
 
 let dbConn = mysql.createConnection({
@@ -40,8 +41,8 @@ exports.verifyToken = (req, res, next) => {
   }
   try {
     let decoded = jwt.verify(token, secret_token);
+    // console.log(decoded);
     const user = decoded;
-    // console.log(user);
     req.user = user;
     next();
   } catch {

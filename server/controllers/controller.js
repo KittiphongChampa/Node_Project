@@ -1,13 +1,14 @@
-
 let mysql = require("mysql");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const saltRounds = 10;
 let jwt = require("jsonwebtoken");
-const secret_token = "mysecret_id_login";
+// const secret_token = "mysecret_id_login";
+const secret_token = "mysecret_id";
 const randomstring = require("randomstring");
 const fs = require("fs");
 const nodemailer = require("nodemailer");
+const { v4: uuidv4 } = require("uuid");
 
 let dbConn = mysql.createConnection({
   host: "localhost",
@@ -20,8 +21,8 @@ dbConn.connect();
 let otp = 0;
 
 let date = new Date();
-let options = { timeZone: 'Asia/Bangkok' };
-let bangkokTime = date.toLocaleString('en-US', options);
+let options = { timeZone: "Asia/Bangkok" };
+let bangkokTime = date.toLocaleString("en-US", options);
 
 const algorithm = "aes-256-ctr";
 const password = "d6F3Efeq";
@@ -87,8 +88,8 @@ exports.testlogin = (req, res) => {
     "SELECT * FROM users WHERE urs_email=?",
     [req.body.email],
     function (error, users) {
-      if (users[0].deleted_at !== null){
-        return res.json({ status: "hasDelete", message: "User has deleted"})
+      if (users[0].deleted_at !== null) {
+        return res.json({ status: "hasDelete", message: "User has deleted" });
       }
       if (error) {
         return res.json({ status: "error", message: error });
@@ -118,18 +119,15 @@ exports.testlogin = (req, res) => {
       );
     }
   );
-}
+};
 
 exports.testfind_delete = (req, res) => {
-  dbConn.query(
-    "SELECT * FROM users",
-    function (error, results) {
-      console.log(results);
-      console.log(results[2].deleted_at);
-      res.json(results[2].deleted_at)
-    }
-  );
-}
+  dbConn.query("SELECT * FROM users", function (error, results) {
+    console.log(results);
+    console.log(results[2].deleted_at);
+    res.json(results[2].deleted_at);
+  });
+};
 
 exports.verify = (req, res) => {
   dbConn.query(
@@ -180,32 +178,14 @@ exports.verify_email = (req, res) => {
   const email = req.body.email;
   let OTP = parseInt(req.body.otp);
   if (OTP === otp) {
-    // dbConn.query(
-    //   "INSERT INTO users (urs_email) VALUES (?)",
-    //   [email],
-    //   function (error, results) {
-    //     if (error) {
-    //       console.log("เข้า error");
-    //       return res.json({ status: "error", message: "เกิดข้อผิดพลาด" });
-    //     } else {
     dbConn.query(
       "SELECT * FROM users WHERE urs_email=?",
       [email],
       function (error, users) {
         if (users) {
-          // var token = jwt.sign(
-          //   {
-          //     email: users[0].urs_email,
-          //     userId: users[0].id,
-          //     role: users[0].urs_type,
-          //   },
-          //   secret_token,
-          //   { expiresIn: "1h" }
-          // ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 1 ชม
           return res.json({
             status: "ok",
             message: "verify email success",
-            // token,
           });
         } else {
           return res.json({
@@ -215,9 +195,6 @@ exports.verify_email = (req, res) => {
         }
       }
     );
-    //     }
-    //   }
-    // );
   } else {
     res.json({ status: "error", message: "otp is incorrect" });
   }
@@ -304,8 +281,8 @@ exports.login = (req, res) => {
     "SELECT * FROM users WHERE urs_email=?",
     [req.body.email],
     function (error, users) {
-      if (users[0].deleted_at !== null){
-        return res.json({ status: "hasDelete", message: "User has deleted"})
+      if (users[0].deleted_at !== null) {
+        return res.json({ status: "hasDelete", message: "User has deleted" });
       }
       if (error) {
         return res.json({ status: "error", message: error });
@@ -325,7 +302,7 @@ exports.login = (req, res) => {
                 role: users[0].urs_type,
               },
               secret_token,
-              // { expiresIn: "3h" }
+              { expiresIn: "3h" }
             ); //กำหนดระยะเวลาในการใช้งาน มีอายุ 3 ชม
             return res.json({ status: "ok", message: "login success", token });
           } else {
@@ -337,10 +314,154 @@ exports.login = (req, res) => {
   );
 };
 
-exports.index = (req, res) => {
-  // console.log(date);
-  // console.log(bangkokTime);
+exports.forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  // const token = uuidv4();
+  // const expirationTime = new Date();
+  // expirationTime.setHours(expirationTime.getHours() + 1);
+  dbConn.query(
+    "SELECT * FROM users WHERE urs_email = ?",
+    [email],
+    function (error, result) {
+      // console.log(result.length);
+      if (result.length !== 1) {
+        return res.json({
+          status: "error",
+          message: "no User in Database",
+        });
+      } else {
+        // const token = jwt.sign({ email }, secret_token, { expiresIn: '1h' });
+        // const resetPasswordLink = `http://localhost:3333/reset-password/${token}`;
+        // console.log(resetPasswordLink);
 
+        otp = Math.random();
+        otp = otp * 1000000;
+        otp = parseInt(otp);
+
+        let transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: "ktpyun@gmail.com",
+            pass: "uzklexxuegiwcehr",
+          },
+        });
+        let mailOptions = {
+          from: "ktpyun@gmail.com",
+          to: req.body.email,
+          subject: "Reset your password",
+          // text: `Click the link below to reset your password: ${resetPasswordLink}`,
+          html: `<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <title>CodePen - OTP Email Template</title>
+  
+</head>
+<body>
+<div style="font-family: Helvetica,Arial,sans-serif;min-width:1000px;overflow:auto;line-height:2">
+  <div style="margin:50px auto;width:70%;padding:20px 0">
+    <div style="border-bottom:1px solid #eee">
+      <a href="" style="font-size:1.4em;color: #00466a;text-decoration:none;font-weight:600">Yun</a>
+    </div>
+    <p style="font-size:1.1em">Hi,</p>
+    <p>Thank you for choosing Yun. Use the following OTP to complete your Password Recovery Procedure. OTP is valid for 5 minutes</p>
+    <h2 style="background: #00466a;margin: 0 auto;width: max-content;padding: 0 10px;color: #fff;border-radius: 4px;">${otp}</h2>
+    <p style="font-size:0.9em;">Regards,<br />Yun</p>
+    <hr style="border:none;border-top:1px solid #eee" />
+    <div style="float:right;padding:8px 0;color:#aaa;font-size:0.8em;line-height:1;font-weight:300">
+      <p>Yun Inc</p>
+      <p>1600 Amphitheatre Parkway</p>
+      <p>California</p>
+    </div>
+  </div>
+</div>
+<h1 style='font-weight:bold;'></h1>
+  
+</body>
+</html>`,
+        };
+        // await transporter.sendMail(mailOptions);
+        transporter.sendMail(mailOptions, function (error, info) {
+          if (error) {
+            console.log("Error sending email:", error);
+            return res.json({
+              status: "error",
+              message: "Failed to send email",
+            });
+          } else {
+            return res.json({
+              status: "ok",
+              message:
+                "An email has been sent to your email address with instructions on how to reset your password.",
+            });
+          }
+        });
+        console.log(otp);
+      }
+    }
+  );
+};
+
+exports.check_otp = (req, res) => {
+  const email = req.body.email;
+  let OTP = parseInt(req.body.otp);
+  if (OTP === otp) {
+    dbConn.query(
+      "SELECT * FROM users WHERE urs_email=?",
+      [email],
+      function (error, users) {
+        if (users) {
+          return res.json({
+            status: "ok",
+            message: "verify email success",
+            users
+          });
+        } else {
+          return res.json({
+            status: "error",
+            message: "verify email failed",
+          });
+        }
+      }
+    );
+  } else {
+    res.json({ status: "error", message: "otp is incorrect" });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  const email = req.body.email;
+  const new_password = req.body.new_password;
+  try{
+    dbConn.query("SELECT * FROM users WHERE urs_email=?",[email], function(error, results){
+      if(results){
+        bcrypt.hash(new_password, saltRounds, function (err, hash) {
+          dbConn.query(
+            "UPDATE users SET urs_password = ? WHERE urs_email = ?",
+            [hash, email],
+            function (error, result) {
+              if (error) {
+                console.log("1");
+                return res.json({ status: "error", message: error });
+              }
+              return res.json({
+                status: "ok",
+                message: "update success",
+              });
+            }
+          );
+        })
+      }
+      else {
+        return res.json({ status: "error", message: error });
+      }
+    })
+  }catch{
+    return res.json({ status: "error", message: error });
+  }
+}
+
+exports.index = (req, res) => {
   const userId = req.user.userId;
   // const role = req.user.role;
   try {
@@ -665,7 +786,7 @@ exports.buytoken = (req, res) => {
           return res.json({ status: "error", message: "เข้า error" });
         } else {
           dbConn.query(
-            "SELECT * FROM package",
+            "SELECT * FROM package WHERE deleted_at IS NULL",
             function (error, package_token) {
               if (error) {
                 return res.json({ status: "error", message: "เข้า error" });
@@ -722,6 +843,10 @@ exports.update_token = (req, res) => {
 
 exports.transaction = (req, res) => {
   const userId = req.user.userId;
+  // const timestamp = results[0].created_at;
+  // const date = new Date(timestamp);
+  // const options = {'timeZone': 'Asia/Bangkok'};
+  // const formattedDate = date.toLocaleString('th-TH', options);
   try {
     dbConn.query(
       "SELECT * FROM transaction_history JOIN users ON transaction_history.usr_id = users.id JOIN package ON transaction_history.package_id = package.id WHERE users.id=?",
@@ -742,73 +867,161 @@ exports.transaction = (req, res) => {
 
 exports.chat = (req, res) => {};
 
+exports.alluser = (req,res) => {
+  try{
+    dbConn.query(
+      "SELECT * FROM users WHERE deleted_at IS NULL AND urs_type != 3",
+      function (error, users) {
+        if (users) {
+          return res.json({ status: "ok", users });
+        } else {
+          return res.json({ status: "error", message: error });
+        }
+      }
+    );
+  }catch{
+    return res.json({ status: "error", message: error });
+  }
+}
+
+exports.viewProfile = (req,res) => {
+  const userId = req.params.id;
+  // console.log(userId);
+  try {
+    dbConn.query(
+      "SELECT * FROM users WHERE id=?",
+      [userId],
+      function (error, users) {
+        if (error) {
+          return res.json({ status: "error", message: "เข้า error" });
+        } else {
+          // console.log(users);
+          return res.json({ status: "ok", users });
+        }
+      }
+    );
+  } catch (err) {
+    return res.json({ status: "error", message: "เข้า catch" });
+  }
+}
+
+exports.delete_User =(req,res) => {
+  const userId = req.params.id;
+  try {
+    dbConn.query(
+      "UPDATE users SET deleted_at = ? WHERE id = ?",
+      [date, userId],
+      function (error, results) {
+        if (results) {
+          return res.json({
+            status: "ok",
+            message: "ระงับบัญชีผู้ใช้สำเร็จ",
+          });
+        } else {
+          return res.json({ status: "error", message: error });
+        }
+      }
+    );
+  } catch {
+    return res.json({
+      status: "error",
+      message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง",
+    });
+  }
+}
+
 exports.package_token = (req, res) => {
   try {
-    dbConn.query("SELECT * FROM package WHERE deleted_at IS NULL", function (error, results) {
-      if (results) {
-        return res.json({ status: "ok", results });
-      } else {
-        return res.json({ status: "error", message: error });
+    dbConn.query(
+      "SELECT * FROM package WHERE deleted_at IS NULL",
+      function (error, results) {
+        if (results) {
+          return res.json({ status: "ok", results });
+        } else {
+          return res.json({ status: "error", message: error });
+        }
       }
-    });
+    );
   } catch {
-    console.log('catch');
+    console.log("catch");
     return res.json({ status: "error", message: error.message });
   }
 };
 
 exports.add_package_token = (req, res) => {
   const { packageName, coins, price } = req.body;
-  try{
+  try {
     dbConn.query(
-      "INSERT INTO package (package, p_price, p_token) VALUES (?, ?, ?)",[packageName, price, coins],
-      function(error, results){
+      "INSERT INTO package (package, p_price, p_token) VALUES (?, ?, ?)",
+      [packageName, price, coins],
+      function (error, results) {
         if (results) {
-          return res.json({ status: "ok", message: "เพิ่มข้อมูลแพ็คเกจการเติมเงินสำเร็จ",  results})
-        }else{
+          return res.json({
+            status: "ok",
+            message: "เพิ่มข้อมูลแพ็คเกจการเติมเงินสำเร็จ",
+            results,
+          });
+        } else {
           return res.json({ status: "error", message: error.message });
         }
       }
     );
-  }catch{
-    return res.json({ status: "error", message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง" });
+  } catch {
+    return res.json({
+      status: "error",
+      message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง",
+    });
   }
 };
 
 exports.update_package_token = (req, res) => {
   const packageId = req.params.id;
-  const {packageName, coins, price} = req.body;
-  try{
+  const { packageName, coins, price } = req.body;
+  try {
     dbConn.query(
-      "UPDATE package SET package = ?, p_price=?, p_token=?  WHERE id = ?", [packageName, price, coins, packageId], 
-      function(error, results){
+      "UPDATE package SET package = ?, p_price=?, p_token=?  WHERE id = ?",
+      [packageName, price, coins, packageId],
+      function (error, results) {
         if (results) {
-          return res.json({ status: "ok", message: "แก้ไขข้อมูลแพ็คเกจการเติมเงินสำเร็จ"})
+          return res.json({
+            status: "ok",
+            message: "แก้ไขข้อมูลแพ็คเกจการเติมเงินสำเร็จ",
+          });
         } else {
           return res.json({ status: "error", message: error });
         }
       }
-    )
-  }catch{
-    return res.json({ status: "error", message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง" });
+    );
+  } catch {
+    return res.json({
+      status: "error",
+      message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง",
+    });
   }
 };
 
 exports.delete_package_token = (req, res) => {
   const packageId = req.params.id;
-  try{
+  try {
     dbConn.query(
-      "UPDATE package SET deleted_at = ? WHERE id = ?", [date, packageId], 
-      function(error, results){
+      "UPDATE package SET deleted_at = ? WHERE id = ?",
+      [date, packageId],
+      function (error, results) {
         if (results) {
-          return res.json({ status: "ok", message: "ลบแพ็คเกจการเติมเงินสำเร็จ"})
+          return res.json({
+            status: "ok",
+            message: "ลบแพ็คเกจการเติมเงินสำเร็จ",
+          });
         } else {
           return res.json({ status: "error", message: error });
         }
       }
-    )
-  }catch{
-    return res.json({ status: "error", message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง" });
+    );
+  } catch {
+    return res.json({
+      status: "error",
+      message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง",
+    });
   }
 };
 

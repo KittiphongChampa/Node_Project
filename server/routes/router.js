@@ -16,7 +16,9 @@ router.post("/register", controller.register);
 router.post("/verify", controller.verify);
 router.post("/verify/email", controller.verify_email);
 router.post("/login", controller.login);
-
+router.post("/forgot-password", controller.forgotPassword);
+router.post("/check_otp", controller.check_otp); 
+router.post("/reset-password", controller.resetPassword);
 //มี token
 router.get("/index", auth.verifyToken, controller.index);
 router.get("/profile", auth.verifyToken, controller.profile);
@@ -38,9 +40,12 @@ router.get("/testinput/:id", controller.testinput);
 
 //admin
 router.get("/packagetoken", auth.verifyToken, auth.adminOnly, controller.package_token);
+router.get("/alluser", auth.verifyToken, auth.adminOnly, controller.alluser);
+router.get("/profile/:id", auth.verifyToken, controller.viewProfile);
 router.post("/packagetoken/add", controller.add_package_token);
 router.patch("/packagetoken/update/:id", controller.update_package_token);
 router.put("/packagetoken/delete/:id", controller.delete_package_token);
+router.put("/alluser/delete/:id", controller.delete_User);
 
 router.post("/omiseAPI", async (req, res, next) => {
   const { email, name, amount, token } = req.body;
