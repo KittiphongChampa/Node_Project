@@ -843,10 +843,6 @@ exports.update_token = (req, res) => {
 
 exports.transaction = (req, res) => {
   const userId = req.user.userId;
-  // const timestamp = results[0].created_at;
-  // const date = new Date(timestamp);
-  // const options = {'timeZone': 'Asia/Bangkok'};
-  // const formattedDate = date.toLocaleString('th-TH', options);
   try {
     dbConn.query(
       "SELECT * FROM transaction_history JOIN users ON transaction_history.usr_id = users.id JOIN package ON transaction_history.package_id = package.id WHERE users.id=?",
@@ -868,15 +864,25 @@ exports.transaction = (req, res) => {
 exports.chat = (req, res) => {};
 
 exports.alluser = (req,res) => {
+  const userId = req.user.userId;
   try{
-    dbConn.query(
-      "SELECT * FROM users WHERE deleted_at IS NULL AND urs_type != 3",
-      function (error, users) {
-        if (users) {
-          return res.json({ status: "ok", users });
-        } else {
-          return res.json({ status: "error", message: error });
+    dbConn.query("SELECT * FROM users WHERE id=?",
+      [userId],
+      function (error, results) {
+        if (results[0].id !== userId) {
+          return res.json({ status: "error", message: "ไม่พบผู้ใช้" });
         }
+        // return res.json({ status: "ok", users, urs_token });
+        dbConn.query(
+          "SELECT * FROM users WHERE deleted_at IS NULL AND urs_type != 3",
+          function (error, users) {
+            if (users) {
+              return res.json({ status: "ok", users, results});
+            } else {
+              return res.json({ status: "error", message: error });
+            }
+          }
+        );
       }
     );
   }catch{
@@ -902,6 +908,59 @@ exports.viewProfile = (req,res) => {
     );
   } catch (err) {
     return res.json({ status: "error", message: "เข้า catch" });
+  }
+}
+
+exports.transferCoins = (req,res) => {
+  const {adminId, userId, coins} = req.body;
+  const coins_int = parseInt(coins);
+  try{
+    //ส่งมาแค่ ID ของสองคนของแอดมินกับของคนที่ถูกโอนให้ 
+    //แต่สามารถเขียนได้ง่ายขึ้นหากทีการส่งจำนวนเงินของแอดมินกับผู้ถูกโอนมาเบย
+    dbConn.query("SELECT * FROM users WHERE id=?",[adminId],
+      function (error, admin) {
+        const admin_tokens = admin[0].urs_token;
+        const admin_token = decrypt(admin_tokens);
+        const admin_token_int = parseInt(admin_token);
+        let sum_token_admin = admin_token_int - coins_int;
+        const adminToken = sum_token_admin.toString();
+        const adminToken_encrypted = encrypt(adminToken);
+        // console.log('ยอดเดิม : '+admin_token_int+'หัก : '+coins_int+'เหลือ : '+sum_token_admin);
+          dbConn.query("SELECT * FROM users WHERE id=?",[userId],
+          function (error, user) {
+            const user_tokens = user[0].urs_token;
+            const user_token = decrypt(user_tokens);
+            const user_token_int = parseInt(user_token);
+            let sum_token_user = user_token_int + coins_int;
+            const userToken = sum_token_user.toString();
+            const userToken_encrypted = encrypt(userToken);
+            // console.log('ยอดเดิม : '+user_token_int+'เติม : '+coins_int+'เหลือ : '+sum_token_user);
+            dbConn.query(
+              "UPDATE users SET urs_token = ? WHERE id = ?",[adminToken_encrypted, adminId],
+              function (error, results) {
+                if (error) {
+                  return res.json({ status: "error", message: error });
+                }
+                dbConn.query(
+                  "UPDATE users SET urs_token = ? WHERE id = ?",[userToken_encrypted, userId],
+                  function (error, result) {
+                    if (error) {
+                      return res.json({ status: "error", message: error });
+                    }
+                    return res.json({
+                      status: "ok",
+                      message: "โอนเหรียญสำเร็จ",
+                    });
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  }catch{
+    return res.json({ status: "error", message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง" });
   }
 }
 

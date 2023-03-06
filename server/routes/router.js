@@ -46,6 +46,7 @@ router.post("/packagetoken/add", controller.add_package_token);
 router.patch("/packagetoken/update/:id", controller.update_package_token);
 router.put("/packagetoken/delete/:id", controller.delete_package_token);
 router.put("/alluser/delete/:id", controller.delete_User);
+router.post("/alluser/transferCoins", controller.transferCoins);
 
 router.post("/omiseAPI", async (req, res, next) => {
   const { email, name, amount, token } = req.body;
