@@ -36,17 +36,24 @@ router.put("/delete_account", auth.verifyToken, controller.delete_account);
 router.put("/token/update", controller.update_token);
 router.post("/chat", auth.verifyToken, controller.chat);
 router.get("/testinput/:id", controller.testinput);
+
+router.put('/profile/password/change', auth.verifyToken, controller.changePassword)
 // router.get("/testinput", controller.testinput);
 
 //admin
 router.get("/packagetoken", auth.verifyToken, auth.adminOnly, controller.package_token);
-router.get("/alluser", auth.verifyToken, auth.adminOnly, controller.alluser);
+router.get("/alluser", auth.verifyToken, auth.adminOnly, controller.allUser);
 router.get("/profile/:id", auth.verifyToken, controller.viewProfile);
 router.post("/packagetoken/add", controller.add_package_token);
 router.patch("/packagetoken/update/:id", controller.update_package_token);
 router.put("/packagetoken/delete/:id", controller.delete_package_token);
 router.put("/alluser/delete/:id", controller.delete_User);
 router.post("/alluser/transferCoins", controller.transferCoins);
+
+router.get("/alladmin", auth.verifyToken, auth.adminOnly, controller.allAdmin);
+router.post("/alladmin/add", controller.createAdmin);
+router.patch("/alladmin/edit/:id", controller.editAdmin);
+router.put("/alladmin/delete/:id", controller.deleteAdmin);
 
 router.post("/omiseAPI", async (req, res, next) => {
   const { email, name, amount, token } = req.body;

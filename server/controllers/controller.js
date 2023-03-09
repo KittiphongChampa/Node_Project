@@ -861,9 +861,7 @@ exports.transaction = (req, res) => {
   }
 };
 
-exports.chat = (req, res) => {};
-
-exports.alluser = (req,res) => {
+exports.allUser = (req, res) => {
   const userId = req.user.userId;
   try{
     dbConn.query("SELECT * FROM users WHERE id=?",
@@ -1084,6 +1082,166 @@ exports.delete_package_token = (req, res) => {
   }
 };
 
+exports.changePassword = (req, res) => {
+  const {oldPassword, newPassword} = req.body;
+  const userId = req.user.userId;
+  try {
+    dbConn.query(
+      "SELECT * FROM users WHERE id=?",[userId],
+      function (error, users) {
+        if (error) {
+          return res.json({ status: "error", message: "เข้า error" });
+        }
+        const hash = users[0].urs_password;
+        bcrypt.compare(oldPassword, hash, function(err, results) {
+          if (err) {
+            console.log('Error comparing passwords:', err);
+            return res.json({ status: "error", message: "Error comparing passwords"});
+          } else if (results) {
+            console.log('Password matches hash!');
+            bcrypt.hash(newPassword, saltRounds, function (err, hash) {
+              dbConn.query(
+                "UPDATE users SET urs_password=? WHERE id = ?",[hash, userId],
+                function (error, result) {
+                  if (error) {
+                    console.log(error);
+                    return res.json({ status: "error", message: "เข้า error" });
+                  } 
+                  return res.json({
+                    status: "ok",
+                    message: "update success",
+                    result
+                  });
+                }
+              );
+            })
+          } else {
+            console.log('Password does not match hash');
+            return res.json({ status: "error", message: "Password does not match hash"});
+          }
+        });
+      }
+    );
+  }catch{
+    return res.json({
+      status: "error",
+      message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง",
+    });
+  }
+};
+
+exports.allAdmin = (req, res) => {
+  const userId = req.user.userId;
+  try{
+    dbConn.query("SELECT * FROM users WHERE id=?",
+      [userId],
+      function (error, results) {
+        if (results[0].id !== userId) {
+          return res.json({ status: "error", message: "ไม่พบผู้ใช้" });
+        }
+        // return res.json({ status: "ok", users, urs_token });
+        dbConn.query(
+          "SELECT * FROM users WHERE deleted_at IS NULL AND urs_type != 0 AND urs_type != 1 AND urs_type != 3",
+          function (error, admins) {
+            if (admins) {
+              return res.json({ status: "ok", results, admins,});
+            } else {
+              return res.json({ status: "error", message: error });
+            }
+          }
+        );
+      }
+    );
+  }catch{
+    return res.json({ status: "catch", message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง" });
+  }
+}
+
+exports.createAdmin = (req, res) => {
+  const {name, email, password} = req.body;
+  const role = 2;
+  try{
+    dbConn.query(
+      "SELECT * FROM users WHERE urs_email=?",
+      [email],
+      function (error, results) {
+        if(results.length >= 1){
+          return res.json({status: "error", message: "อีเมลซ้ำ"})
+        }
+        bcrypt.hash(password, saltRounds, function (err, hash) {
+          dbConn.query(
+            "INSERT INTO users SET urs_name=?, urs_email=?, urs_password=?, urs_type=?",
+            [name, email, hash, role],
+            function (error, result) {
+              if (error) {
+                return res.json({ status: "error", message: error.message });
+              } 
+              return res.json({
+                status: "ok",
+                message: "create Admin success",
+                result
+              });
+            }
+          );
+        })
+      }
+    )
+  }catch{
+    return res.json({ status: "catch", message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง" });
+  }
+}
+
+exports.editAdmin = (req, res) => {
+  const adminId = req.params.id;
+  const {name, email, password} = req.body;
+  try{
+    bcrypt.hash(password, saltRounds, function (err, hash) {
+      dbConn.query(
+        "UPDATE users SET urs_name=?, urs_email=?, urs_password=?  WHERE id = ?",
+        [name, email, hash, adminId],
+        function (error, results) {
+          if (results) {
+            console.log(results);
+            return res.json({
+              status: "ok",
+              message: "แก้ไขข้อมูลแอดมินสำเร็จ",
+            });
+          } else {
+            return res.json({ status: "error", message: error });
+          }
+        }
+      );
+    })
+  }catch{
+    return res.json({ status: "catch", message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง" });
+  }
+}
+
+exports.deleteAdmin = (req, res) => {
+  const adminId = req.params.id;
+  try {
+    dbConn.query(
+      "UPDATE users SET deleted_at = ? WHERE id = ?",
+      [date, adminId],
+      function (error, results) {
+        if (results) {
+          return res.json({
+            status: "ok",
+            message: "ลบบัญชีแอดมินสำเร็จ",
+          });
+        } else {
+          return res.json({ status: "error", message: error });
+        }
+      }
+    );
+  } catch {
+    return res.json({
+      status: "catch",
+      message: "เกิดข้อผิดพลาดบางอย่าง กรุณาลองใหม่อีกครั้ง",
+    });
+  }
+};
+
 exports.testinput = (req, res) => {
   // console.log(req.params.id);
   const test = req.params.id;
@@ -1099,3 +1257,6 @@ exports.testinput = (req, res) => {
     }
   );
 };
+
+exports.chat = (req, res) => {};
+
